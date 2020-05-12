@@ -12,5 +12,7 @@ Be sure to be in this directory and run the two commands:
 ```docker build -t marko-polo```
 ```docker run docker run -v `pwd`/app/output:/app/output marko-polo```
 
+## Output folders
+For now the output will be generated in app/output
 
 ##  More to come later.
