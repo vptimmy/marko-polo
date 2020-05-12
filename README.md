@@ -18,3 +18,5 @@ Be sure to be in this directory and run the two commands:
 For now the output will be generated in app/output
 
 ##  More to come later.
+
+## Special thanks to this link to find ticker from a cik

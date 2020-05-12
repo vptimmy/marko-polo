@@ -1,19 +1,20 @@
 import os
-import multiprocessing
-import numpy as np
 import logging
 import zipfile
+import multiprocessing
 import urllib.request
 import urllib.parse
 from urllib.error import HTTPError
+import json
 
 import config
 from laundry import FilingCleaner
 
-from datetime import datetime, timedelta
 import requests
-from bs4 import BeautifulSoup
 import yfinance as yf
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+
 
 logger = logging.getLogger(config.app_name)
 
@@ -21,76 +22,76 @@ cik_to_ticker_dict = dict()
 
 
 def build_dict_from_ticker():
-    cik_ticker_dict = dict()
+    global cik_to_ticker_dict
     logger.info(f'Getting ticker / cik map from {config.sec_ticker_url}.')
     ticker = requests.get(config.sec_ticker_url)
     lines = ticker.text.splitlines()
     for line in lines:
         (ticker_symbol, cik) = line.split('\t')
-        cik_ticker_dict[cik] = ticker_symbol
-    return cik_ticker_dict
+        cik_to_ticker_dict[cik] = ticker_symbol
 
 
 def get_financial(data_dict):
+    """
+    This will pull financial data from Yahoo.  If the report is on a Friday then we will not
+    process the data as too many things can happen over the weekend which could influence the stock.
+
+    Best days to gather data is Monday, Tuesday, Wednesday (with no holidays).
+    """
     global cik_to_ticker_dict
-    finance_dict = dict()
 
     cik = data_dict['cik']
 
     try:
         ticker_symbol = cik_to_ticker_dict[cik]
+        data_dict['ticker_symbol'] = ticker_symbol
         logger.debug(f'ticker symbol for cik {cik} is {ticker_symbol}.')
     except KeyError:
         logger.error(f'Could not find {cik} in ticker feed.')
-        return finance_dict
+        return None
 
-    approved_date = datetime.strptime(data_dict['date'], '%Y-%m-%d %H:%M:%S')
-    end_date = approved_date + timedelta(days=3)
+    accepted_date = datetime.strptime(data_dict['date_accepted'], '%Y-%m-%d %H:%M:%S')
+    end_date = accepted_date + timedelta(days=3)
+    logger.debug(f'Approved date {accepted_date}.  End date is {end_date}')
 
-    if not (16 <= approved_date.hour <= 19):
-        logging.info('outside hours')
-        return finance_dict
+    if not 16 <= accepted_date.hour <= 19:
+        logging.info('10-Q is outside time from.  Must be submitted between 4pm and 7pm')
+        return None
 
-    # Do not include the weekends dates
-    work_days = np.busday_count(approved_date, end_date)
-    while work_days < 3:
-        end_date = end_date + timedelta(days=1)
-        work_days = np.busday_count(approved_date, end_date)
-
+    accepted_date = accepted_date.date()
     # Get the stock history between start and end date
     try:
-        hist = yf.Ticker(ticker_symbol).history(start=approved_date, end=end_date)
+        hist = yf.Ticker(ticker_symbol).history(start=accepted_date, end=end_date)
+        if hist.empty:
+            logger.error(f'Could not find a history for {ticker_symbol} in yFinance.')
+            return None
         logger.debug(f'Got yahoo finance history {hist}')
     except Exception as e:
         logging.error(f'yFinance encountered an error: {e}')
-        return finance_dict
+        return None
 
-    next_business_day = approved_date + timedelta(days=1)
-    if next_business_day.weekday() == 6:
-        next_business_day = approved_date + timedelta(days=2)
-    elif next_business_day.weekday() == 7:
-        next_business_day = approved_date + timedelta(days=1)
-
+    # See if there is any history for the next day
+    next_business_day = accepted_date + timedelta(days=1)
     if next_business_day not in hist.index:
-        logger.debug(f'Could not find a history for {ticker_symbol} on {next_business_day}.')
-        return finance_dict
+        logger.debug(f'No stock history for {next_business_day}.')
+        return None
 
     price1 = hist.loc[next_business_day]['Open']
     price2 = hist.loc[next_business_day]['Close']
-    finance_dict['prc_change'] = price_rate_change(price1, price2)
+    data_dict['prc_change'] = price_rate_change(price1, price2)
+    logger.debug(f'Next business day {next_business_day} Open: {price1} Close: {price2}')
 
+    # See if there is any history for following business day
     following_business_day = next_business_day + timedelta(days=1)
-    if following_business_day.weekday() == 6:
-        following_business_day = following_business_day + timedelta(days=2)
-    elif following_business_day.weekday() == 7:
-        following_business_day = following_business_day + timedelta(days=1)
+    if following_business_day not in hist.index:
+        data_dict['error'] = f'No stock history for {following_business_day}'
+        return data_dict
 
-    if following_business_day in hist.index:
-        price1 = hist.loc[next_business_day]['Open']
-        price2 = hist.loc[following_business_day]['Open']
-        finance_dict['prc_change_t2'] = price_rate_change(price1, price2)
-
-    return finance_dict
+    price1 = hist.loc[next_business_day]['Open']
+    price2 = hist.loc[following_business_day]['Open']
+    logger.debug(f'Next business day {next_business_day} Open: {price1}.  Following business day Open: {price2}')
+    data_dict['prc_change_t2'] = price_rate_change(price1, price2)
+    return data_dict
 
 
 def price_rate_change(price1, price2):
@@ -113,12 +114,16 @@ def remove_master_index_file():
         pass
 
 
-def download_and_clean_filing(data_dict):
-    uri = data_dict['uri']
+def download_and_clean_filing(data_dict: dict):
+    url = data_dict['url']
+    cik = data_dict['cik']
 
-    logger.info(f'Processing {uri}')
-    url = f'{config.sec_website}/Archives/{uri}'
-    response = requests.get(url)
+    logger.info(f'Processing CIK {cik} from {url}')
+    try:
+        response = requests.get(url)
+    except requests.exceptions.ConnectionError as connection_error:
+        logger.error(f'Encountered an error connecting to {url}.  Error: {connection_error}')
+        return None
 
     soup = BeautifulSoup(response.content.decode('utf-8'), "lxml")
     documents = soup.find('table', {'class': 'tableFile', 'summary': 'Document Format Files'})
@@ -126,21 +131,22 @@ def download_and_clean_filing(data_dict):
         for tr in documents.find_all('tr'):
             td = tr.find_all('td')
             if len(td) >= 4 and td[3].text == config.sec_form_type:
-                # We found the report.
                 filing_url = td[2].find('a', href=True)
                 filing_href = filing_url['href']
-                data_dict['date'] = soup.find('div', attrs={'class': 'infoHead'}, text='Accepted')\
-                                        .findNext('div', {'class': 'info'}).text
+                data_dict['date_accepted'] = soup.find('div', attrs={'class': 'infoHead'}, text='Accepted')\
+                                                 .findNext('div', {'class': 'info'}).text
 
-                if 'ix?' in filing_href:
-                    filing_href = '/' + '/'.join(filing_href.split('/')[2:])
+                finance_data = get_financial(data_dict)
+                if finance_data:
+                    if 'ix?' in filing_href:
+                        filing_href = '/' + '/'.join(filing_href.split('/')[2:])
 
-                response = requests.request('GET', config.sec_website + filing_href)
-
-                laundry = FilingCleaner(response.text, data_dict)
-                laundry.wash()
-                laundry.fold()
-                break
+                    response = requests.request('GET', config.sec_website + filing_href)
+                    laundry = FilingCleaner(response.text, data_dict)
+                    laundry.wash()
+                    return finance_data
+                return None
+    return None
 
 
 def process_master_index():
@@ -151,7 +157,7 @@ def process_master_index():
     3) Download and clean all the items in the list
     4) Be sure to set your CPU number_of_pools.  View the README to learn more.
     """
-    global cik_to_ticker_dict
+    build_dict_from_ticker()
 
     # Remove all the old cleaned filings
     remove_filing_files()
@@ -162,20 +168,21 @@ def process_master_index():
     master_index.close()
 
     filings_to_download_and_clean = list()
-    cik_to_ticker_dict = build_dict_from_ticker()
-
     for line in lines:
         (cik, company_name, form_type, date_filed, file_name) = line.split('|')
 
         if form_type == config.sec_form_type:
             filings_to_download_and_clean.append({
-                'uri': file_name.replace(".txt", "-index.html"),
-                'cik': cik
+                'url': f'{config.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
+                'cik': cik,
+                'date_filed': date_filed
             })
 
     with multiprocessing.Pool(processes=int(config.number_of_pools)) as pool:
-        results = [pool.map_async(download_and_clean_filing, filings_to_download_and_clean)]
-        [p.get() for p in results]
+        data = list(filter(None, pool.map(download_and_clean_filing, filings_to_download_and_clean)))
+        with open(os.path.join(config.output_data_files, 'finance.json'), 'w') as outfile:
+            json.dump(data, outfile, indent=4)
+
     pool.close()
     pool.join()
 

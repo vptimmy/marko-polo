@@ -34,7 +34,7 @@ class FilingCleaner:
         [x.extract() for x in self.soup.find_all('table') if get_digit_percentage(x.get_text()) > 0.15]
 
     def wash(self):
-        logger.debug('Started washing.')
+        logger.info('Started washing.')
 
         # Remove xml xbrli
         [x.extract() for x in self.soup.find_all(re.compile("^xbrli:"))]
@@ -58,13 +58,8 @@ class FilingCleaner:
 
         self.text = '\n'.join(
             filter(lambda line: len(line) > 0 and (sum(i.isalpha() for i in line) / len(line) > .5), text.splitlines()))
-        logger.debug('Finished washing.')
 
-    def fold(self):
-        logger.debug('Started folding')
-        file_name = f'{config.output_folder}/{self.data_dict["cik"]}-{self.data_dict["date"]}.txt'
+        file_name = f'{config.output_cleaned_files}/{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
         with open(file_name, 'w') as file:
             file.write(self.text)
-        logger.info(f'{file_name} is washed and folded.')
-        logger.debug('Finished folding')
-
+        logger.info(f'Finished washing {file_name}.')
