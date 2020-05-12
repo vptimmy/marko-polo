@@ -10,7 +10,7 @@ When ever you modify anything you will have to rebuild the docker image and run 
 ## Docker instructions:
  
 **Build Container**   
-```docker build -t marko-polo```   
+```docker build -t marko-polo .```   
 
 **Run container Linux / OSx**   
 ```docker run -v $(pwd)/app/output:/app/output marko-polo```
