@@ -1,0 +1,7 @@
+.idea
+app/output/*
+venv
+app/input/cik_to_ticker.txt
+*.iml
+app/.env
+

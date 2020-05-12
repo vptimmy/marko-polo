@@ -1,0 +1,6 @@
+# Create your own custome mappings for missing CIK -> ticker symbols
+# Visit https://www.sec.gov/edgar/searchedgar/companysearch.html and search for the CIK to get company name
+# Look up that company name to get its ticker symbol.
+
+# Format is CIK TICKER
+1534155 GSG

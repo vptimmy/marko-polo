@@ -1,0 +1,11 @@
+yfinance
+requests
+nltk
+fuzzywuzzy
+beautifulsoup4
+lxml
+google-cloud-core
+dask
+alpaca-trade-api
+python-dotenv
+python-Levenshtein
