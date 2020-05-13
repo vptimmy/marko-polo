@@ -11,7 +11,7 @@ try:
         datefmt=ev.logging_date_format,
     )
     log_writer = logging.FileHandler(os.path.join(ev.output_log_files, 'output.log'), mode='w')
-    log_writer.setLevel(level='DEBUG')
+    log_writer.setLevel('DEBUG')
     log_writer.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)5s %(message)s'))
 
     logger = logging.getLogger(ev.app_name)

@@ -13,8 +13,8 @@ creating the differences between the 10-Q reports and uploading the data to Goog
 
 
 ## Environmental Variables
-You can set and control your own environmental variables by creating a `.env` file at the project
-root. Environmental variables you can currently set:
+You can set and control your own environmental variables by creating a `.env` file at the app directory. 
+Environmental variables you can currently set:
 ```
 NUMBER_OF_POOLS=8          # This is the number of CPU's / cores. Processes the data faster.
 LOGGING_LEVEL=INFO         # Can also be set to DEBUG, ERROR, WARNING.  Defaults to INFO
