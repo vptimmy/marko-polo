@@ -256,7 +256,7 @@ def download_master_zip():
     remove_master_index_file()
 
     logger.info(f'Started retrieving edgar master zip files since {ev.sec_analyze_since_fy}.')
-    year = ev.sec_analyze_since_fy
+    year = int(ev.sec_analyze_since_fy)
     while year <= datetime.today().year:
 
         if ev.sec_analyze_quarter:
