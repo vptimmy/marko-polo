@@ -16,13 +16,23 @@ creating the differences between the 10-Q reports and uploading the data to Goog
 You can set and control your own environmental variables by creating a `.env` file at the app directory. 
 Environmental variables you can currently set:
 ```
-NUMBER_OF_POOLS=8          # This is the number of CPU's / cores. Processes the data faster.
 LOGGING_LEVEL=INFO         # Can also be set to DEBUG, ERROR, WARNING.  Defaults to INFO
 SEC_ANALYZE_SINCE_FY=2020  # Where do you want to start your analyze?  The further back the longer it takes
 SEC_ANALYZE_QUARTER=QTR2   # This would just anyalze QTR2 in 2020.
 ```
 
 ## Docker instructions:
+If you don't know much about Python then I recommend you to use [Docker](https://docker.com) to run
+this program.  Docker will remove all the pain points of getting Python installed on your machine and setting
+up your computer to run this application.  It will take ~ 10 minutes to download and install Docker compared
+to hours of setting up and learning Python.
+
+[Docker](https://docker.com) by default only gives you 2 cpus and limited memory.  This program does a lot of data processing, so the 
+more cores / cpus / memory you give it the faster it will complete.
+
+Go to your Docker Settings and modify your resources to allocate more.
+
+
 **Build Container**   
 ```docker build -t marko-polo .```   
 
@@ -32,7 +42,21 @@ SEC_ANALYZE_QUARTER=QTR2   # This would just anyalze QTR2 in 2020.
 **Run container Windows Powershell**   
 ```docker run -v ${PWD}\app\output:/app/output marko-polo```
 
+## Running locally with Python
+Unless you know Python rather well I recommend you use the Docker above.  If you comfortable with Python
+and know how to troubleshoot and install dependencies the you can follow the steps below to run locally.
+  
+First install Python 3.6+ (I use f-strings in the code)
+
+### Running with Python Linux/OSx instructions
+1) `pip3 install -r requirements.txt`
+2) `python3 app/main.py`
+
+### Running with Python Windows instructions
+1) `pip3 install -r requirements.txt` *requires you to know where pip3 is on windows*
+2) `python3 app\main.py`
+
 ## Output folders
-As of now the log files are located in app/output.  Be sure to use the `-v` above to volume mount that folder.
+As of now the log files stored in app/output.  Be sure to use the `-v` above to volume mount that folder.
 
 

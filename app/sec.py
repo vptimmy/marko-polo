@@ -198,17 +198,20 @@ def process_master_index():
     for line in lines:
         (cik, company_name, form_type, date_filed, file_name) = line.split('|')
         if form_type == ev.sec_form_type:
-            logger.debug(f'CIK: {pad_string(string=cik)} Found a {ev.sec_form_type} form.')
             filings_to_download_and_clean.append({
                 'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
                 'cik': cik,
                 'date_filed': date_filed
             })
 
-    with multiprocessing.Pool(processes=int(ev.number_of_pools)) as pool:
-        logger.info('Started processing files.')
-        data = list(filter(None, pool.map(download_and_clean_filing, filings_to_download_and_clean)))
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
+        data = pool.imap(download_and_clean_filing, filings_to_download_and_clean, chunksize=100)
         logger.info('Finished processing files.')
+
+        # Remove null entries in dictionary
+        data = list(filter(None, data))
+
         logger.info('Started writing data files')
         with open(os.path.join(ev.output_data_files, 'finance.json'), 'w') as outfile:
             json.dump(data, outfile, indent=4)
