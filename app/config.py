@@ -14,10 +14,10 @@ class Environment:
         # output folders
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
         self.output_folder = os.path.join(self.dir_path, 'output')
-        self.output_cleaned_files = os.path.join(self.dir_path, self.output_folder, 'cleaned_files')
-        self.output_log_files = os.path.join(self.dir_path, self.output_folder, "logs")
-        self.output_data_files = os.path.join(self.dir_path, self.output_folder, "data")
-        self.output_db = os.path.join(self.dir_path, self.output_folder, "db")
+        self.output_cleaned_files = os.path.join(self.output_folder, 'cleaned_files')
+        self.output_log_files = os.path.join(self.output_folder, "logs")
+        self.output_data_files = os.path.join(self.output_folder, "data")
+        self.output_db = os.path.join(self.output_folder, "db")
 
         # sec stuff
         self.sec_website = 'https://www.sec.gov'
