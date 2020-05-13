@@ -33,7 +33,7 @@ more cores / cpus / memory you give it the faster it will complete.
 Go to your Docker Settings and modify your resources to allocate more.
 
 
-**Build Container**   
+**Build Container**   *(first time build has to download base container.  Will take a few minutes)*  
 ```docker build -t marko-polo .```   
 
 **Run container Linux / OSx**   
@@ -43,8 +43,8 @@ Go to your Docker Settings and modify your resources to allocate more.
 ```docker run -v ${PWD}\app\output:/app/output marko-polo```
 
 ## Running locally with Python
-Unless you know Python rather well I recommend you use the Docker above.  If you comfortable with Python
-and know how to troubleshoot and install dependencies the you can follow the steps below to run locally.
+Unless you know Python rather well I recommend you use the Docker method above.  If you comfortable with Python,
+and know how to troubleshoot and install dependencies, then you can follow the steps below to run natively.
   
 First install Python 3.6+ (I use f-strings in the code)
 
@@ -61,11 +61,11 @@ As of now the log files stored in app/output.  Be sure to use the `-v` above to 
 
 ## Training your bot.
 When you look at the output log files you are going to see lots of **ERRORS** relating to not being able to
-find the CIK to ticker symbol.  Currently, there is not easy full proof way to accomplish this.
+find the CIK to ticker symbol.  Currently, there is no easy full proof way to accomplish this.
 
 For now, you can modify the file app/input/cik_to_ticker.txt.  You can visit the SEC Edgar search to
 find the name of the CIK `https://www.sec.gov/edgar/searchedgar/companysearch.html`.  When you 
-get the name of the company just lookups its ticker symbol.  Then you can add the following line
+get the name of the company just lookup its ticker symbol.  Then you can add the following line
 to the above text file:  
 ```12345678:found_ticker_symbol```
 
