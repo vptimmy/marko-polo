@@ -59,4 +59,14 @@ First install Python 3.6+ (I use f-strings in the code)
 ## Output folders
 As of now the log files stored in app/output.  Be sure to use the `-v` above to volume mount that folder.
 
+## Training your bot.
+When you look at the output log files you are going to see lots of **ERRORS** relating to not being able to
+find the CIK to ticker symbol.  Currently, there is not easy full proof way to accomplish this.
+
+For now, you can modify the file app/input/cik_to_ticker.txt.  You can visit the SEC Edgar search to
+find the name of the CIK `https://www.sec.gov/edgar/searchedgar/companysearch.html`.  When you 
+get the name of the company just lookups its ticker symbol.  Then you can add the following line
+to the above text file:  
+```12345678:found_ticker_symbol```
+
 

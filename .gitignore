@@ -1,5 +1,6 @@
 .idea
 app/output/*
+app/input/cik_to_ticker.txt
 *.iml
 .env
 
