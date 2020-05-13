@@ -35,6 +35,13 @@ def build_dict_from_ticker():
         (ticker_symbol, cik) = line.split('\t')
         cik_to_ticker_dict[cik] = ticker_symbol
 
+    with open(os.path.join(ev.dir_path, 'input', 'cik_to_ticker.txt')) as cik_input:
+        for line in cik_input:
+            if not line.startswith('#') and len(line) > 5:
+                cik, ticker = line.strip().split(' ')
+                if cik and ticker:
+                    cik_to_ticker_dict[cik] = ticker
+
 
 def remove_master_index_file():
     """ Remove the old master index file.  Since we append to the file we need to start with a fresh slate """
