@@ -1,14 +1,28 @@
 # Marco-Polo
-Beginning of an Algo Trading Bot
+This is the beginning of an Algo trading bot.  This was a [COVID-19](https://en.wikipedia.org/wiki/Coronavirus_disease_2019)
+inspired project to keep my mind busy and sane.  
 
-## What you need for now
-Modify [Config File app/config.py ](app/config.py) to reflect the number of processors you have.  If you
-do not know then set it low.  Default is to 8 which is my dev box. 
+A friend asked for assistance getting this [project](https://towardsdatascience.com/build-a-commission-free-algo-trading-bot-by-machine-learning-quarterly-earnings-reports-full-b414e5d759e8) 
+up and running.  After all the usual hoops of debugging and getting the software configured I decided to attempt to streamline
+the business logic and process.  This project includes a [Dockerfile](https://docker.com) so you do not have to
+configure Python nor install any dependencies / requirements.
 
-When ever you modify anything you will have to rebuild the docker image and run it again to update. 
+**THIS PROJECT IS INCOMPLETE!**   
+Currently it will download all the 10-Q reports and create a financial.json file.  I still need to implement
+creating the differences between the 10-Q reports and uploading the data to Google AI.
+
+
+## Environmental Variables
+You can set and control your own environmental variables by creating a `.env` file at the project
+root. Environmental variables you can currently set:
+```
+NUMBER_OF_POOLS=8          # This is the number of CPU's / cores. Processes the data faster.
+LOGGING_LEVEL=INFO         # Can also be set to DEBUG, ERROR, WARNING.  Defaults to INFO
+SEC_ANALYZE_SINCE_FY=2020  # Where do you want to start your analyze?  The further back the longer it takes
+SEC_ANALYZE_QUARTER=QTR2   # This would just anyalze QTR2 in 2020.
+```
 
 ## Docker instructions:
- 
 **Build Container**   
 ```docker build -t marko-polo .```   
 
@@ -18,8 +32,7 @@ When ever you modify anything you will have to rebuild the docker image and run 
 **Run container Windows Powershell**   
 ```docker run -v ${PWD}\app\output:/app/output marko-polo```
 
-
 ## Output folders
-For now the output will be generated in app/output
+As of now the log files are located in app/output.  Be sure to use the `-v` above to volume mount that folder.
 
 

@@ -1,10 +1,11 @@
 from bs4 import BeautifulSoup
-import config
+from config import Environment
 import html
 import re
 import logging
 
-logger = logging.getLogger(config.app_name)
+ev = Environment()
+logger = logging.getLogger(ev.app_name)
 
 
 class FilingCleaner:
@@ -34,8 +35,6 @@ class FilingCleaner:
         [x.extract() for x in self.soup.find_all('table') if get_digit_percentage(x.get_text()) > 0.15]
 
     def wash(self):
-        logger.info('Started washing.')
-
         # Remove xml xbrli
         [x.extract() for x in self.soup.find_all(re.compile("^xbrli:"))]
 
@@ -59,7 +58,6 @@ class FilingCleaner:
         self.text = '\n'.join(
             filter(lambda line: len(line) > 0 and (sum(i.isalpha() for i in line) / len(line) > .5), text.splitlines()))
 
-        file_name = f'{config.output_cleaned_files}/{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
+        file_name = f'{ev.output_cleaned_files}/{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
         with open(file_name, 'w') as file:
             file.write(self.text)
-        logger.info(f'Finished washing {file_name}.')

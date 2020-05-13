@@ -1,4 +1,5 @@
 .idea
 app/output/*
 *.iml
+.env
 

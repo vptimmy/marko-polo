@@ -7,3 +7,4 @@ lxml
 google-cloud-core
 dask
 alpaca-trade-api
+python-dotenv
