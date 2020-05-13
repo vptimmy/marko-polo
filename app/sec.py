@@ -5,10 +5,11 @@ import multiprocessing
 import urllib.request
 import urllib.parse
 from urllib.error import HTTPError
-import json
 
 from config import Environment
 from laundry import FilingCleaner
+from process_and_prepare import ProcessAndPrepare
+import db
 
 import requests
 import yfinance as yf
@@ -68,6 +69,11 @@ def remove_filing_files():
         if file.endswith(".txt"):
             os.remove(f'{ev.output_cleaned_files}/{file}')
     logger.info(f'Finished deleting all cleaned files from {ev.output_cleaned_files}.')
+
+
+def parse_finance():
+    tasks = ProcessAndPrepare()
+    tasks.process_finance()
 
 
 def get_financial(data_dict):
@@ -133,7 +139,7 @@ def get_financial(data_dict):
     price2 = hist.loc[following_business_day]['Open']
     logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Next business day {next_business_day} '
                  f'Open: {price1}.  Following business day Open: {price2}')
-    data_dict['prc_change_t2'] = price_rate_change(price1, price2)
+    data_dict['prc_change2'] = price_rate_change(price1, price2)
     return data_dict
 
 
@@ -177,11 +183,11 @@ def download_and_clean_filing(data_dict: dict):
                     response = requests.request('GET', ev.sec_website + filing_href)
                     logger.debug(f'CIK: {cik} Started cleaning file.')
                     laundry = FilingCleaner(response.text, data_dict)
-                    laundry.wash()
+                    finance_data['file_name'] = laundry.wash()
                     logger.debug(f'CIK: {cik} Finished cleaning file.')
-                    return finance_data
-                return {}
-    return {}
+
+                    # Insert this record into the database
+                    db.insert_into_finance(finance_data)
 
 
 def process_master_index():
@@ -193,8 +199,9 @@ def process_master_index():
     """
     build_dict_from_ticker()
 
-    # Remove all the old cleaned filings
+    # Remove all the old cleaned filings and truncate the database
     remove_filing_files()
+    db.truncate_finance()
 
     # Created by download_master_zip function below.
     master_index = open(f'{ev.output_folder}/master.idx')
@@ -208,23 +215,19 @@ def process_master_index():
             filings_to_download_and_clean.append({
                 'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
                 'cik': cik,
-                'date_filed': date_filed
+                'date_filed': date_filed,
+                'company_name': company_name
             })
 
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
         logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
-        data = pool.imap(download_and_clean_filing, filings_to_download_and_clean, chunksize=100)
+        pool.map(download_and_clean_filing, filings_to_download_and_clean)
         logger.info('Finished processing files.')
-
-        # Remove null entries in dictionary
-        data = list(filter(None, data))
-
-        logger.info('Started writing data files')
-        with open(os.path.join(ev.output_data_files, 'finance.json'), 'w') as outfile:
-            json.dump(data, outfile, indent=4)
-        logger.info('Finished writing data file.')
     pool.close()
     pool.join()
+
+    # Now parse and prepare the finance.json file
+    parse_finance()
 
 
 def append_master_index(zip_file):

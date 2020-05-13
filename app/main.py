@@ -3,6 +3,7 @@ import os
 import logging
 from config import Environment
 import sec
+import db
 
 try:
     ev = Environment()
@@ -38,6 +39,10 @@ def create_output_directories():
         logger.debug(f'Creating folder {ev.output_data_files}.  Data files will be placed here.')
         os.makedirs(ev.output_data_files)
 
+    if not os.path.exists(ev.output_db):
+        logger.debug(f'Creating folder {ev.output_db}.  Data files will be placed here.')
+        os.makedirs(ev.output_db)
+
 
 def main():
     """
@@ -47,9 +52,20 @@ def main():
     3) Process and clean the master index files
     """
 
+    # Create output folder and database
     create_output_directories()
-    sec.download_master_zip()
-    sec.process_master_index()
+    db.create_finance_table()
+
+    if ev.app_do_all:
+        sec.download_master_zip()
+        sec.process_master_index()
+        sec.parse_finance()
+
+    elif ev.app_parse_finance:
+        sec.parse_finance()
+
+    else:
+        logger.debug('Could not find anything to do.')
 
 
 if __name__ == "__main__":

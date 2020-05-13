@@ -3,6 +3,7 @@ from config import Environment
 import html
 import re
 import logging
+import os
 
 ev = Environment()
 logger = logging.getLogger(ev.app_name)
@@ -58,6 +59,8 @@ class FilingCleaner:
         self.text = '\n'.join(
             filter(lambda line: len(line) > 0 and (sum(i.isalpha() for i in line) / len(line) > .5), text.splitlines()))
 
-        file_name = f'{ev.output_cleaned_files}/{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
-        with open(file_name, 'w') as file:
+        file_name = f'{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
+        with open(os.path.join(ev.output_cleaned_files, file_name), 'w') as file:
             file.write(self.text)
+
+        return file_name

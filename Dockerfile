@@ -1,4 +1,7 @@
 FROM python:3.7.7-buster
+
+RUN apt-get install libsqlite3-dev
+
 COPY ./app/requirements.txt /requirements.txt
 RUN pip install --no-cache-dir -r /requirements.txt
 
