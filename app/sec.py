@@ -8,40 +8,16 @@ from urllib.error import HTTPError
 
 from config import Environment
 from laundry import FilingCleaner
+from finance import get_financial, generate_cik_to_ticker_dict
 from process_and_prepare import ProcessAndPrepare
 import db
 
 import requests
-import yfinance as yf
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime
 
 ev = Environment()
 logger = logging.getLogger(ev.app_name)
-
-cik_to_ticker_dict = dict()
-
-
-def build_dict_from_ticker():
-    """
-    Download the ticker.txt file from SEC.
-
-    @todo Need to add the ability to add your own CIK:Ticker symbol via a file in the input directory.
-    """
-    global cik_to_ticker_dict
-    logger.info(f'Getting ticker / cik map from {ev.sec_ticker_url}.')
-    ticker = requests.get(ev.sec_ticker_url)
-    lines = ticker.text.splitlines()
-    for line in lines:
-        (ticker_symbol, cik) = line.split('\t')
-        cik_to_ticker_dict[cik] = ticker_symbol
-
-    with open(os.path.join(ev.dir_path, 'input', 'cik_to_ticker.txt')) as cik_input:
-        for line in cik_input:
-            if not line.startswith('#') and len(line) > 5:
-                cik, ticker = line.strip().split(' ')
-                if cik and ticker:
-                    cik_to_ticker_dict[cik] = ticker
 
 
 def remove_master_index_file():
@@ -51,14 +27,6 @@ def remove_master_index_file():
         logger.info(f'Deleted {ev.output_folder}/master.idx file.')
     except FileNotFoundError:
         pass
-
-
-def pad_string(string: str, padding_length=10, padding_character='0'):
-    return string.rjust(padding_length, padding_character)
-
-
-def price_rate_change(price1, price2):
-    return (price1 - price2) / price2
 
 
 def remove_filing_files():
@@ -73,161 +41,10 @@ def remove_filing_files():
 
 def parse_finance():
     tasks = ProcessAndPrepare()
-    tasks.process_finance()
 
 
-def get_financial(data_dict):
-    """
-    This will pull financial data from Yahoo.  If the report is on a Friday then we will not
-    process the data as too many things can happen over the weekend which could influence the stock.
-
-    Best days to gather data is Monday, Tuesday, Wednesday (with no holidays).
-    """
-    global cik_to_ticker_dict
-
-    cik = data_dict['cik']
-    cik_log = pad_string(string=cik)
-
-    try:
-        ticker_symbol = cik_to_ticker_dict[cik]
-        data_dict['ticker_symbol'] = ticker_symbol
-        logger.debug(f'CIK: {cik_log} Ticker symbol is {ticker_symbol}.')
-    except KeyError:
-        logger.error(f'CIK: {cik_log} Could not find {cik} in ticker feed.')
-        return {}
-
-    accepted_date = datetime.strptime(data_dict['date_accepted'], '%Y-%m-%d %H:%M:%S')
-    end_date = accepted_date + timedelta(days=3)
-    logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Accepted date {accepted_date}.  End date is {end_date}')
-
-    if not 16 <= accepted_date.hour <= 19:
-        logging.info(f'CIK: {cik_log} Ticker: {ticker_symbol} 10-Q is outside time frame.  '
-                     'Must be submitted between 4pm and 7pm.')
-        return {}
-
-    accepted_date = accepted_date.date()
-    # Get the stock history between start and end date
-    try:
-        hist = yf.Ticker(ticker_symbol).history(start=accepted_date, end=end_date)
-        if hist.empty:
-            logger.error(f'CIK: {cik_log} Ticker: {ticker_symbol} Could not find a history in yFinance.')
-            return {}
-        logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Got yahoo finance history\r\n{hist}')
-    except Exception as e:
-        logging.error(f'CIK: {cik_log} Ticker: {ticker_symbol} yFinance encountered an error: {e}')
-        return {}
-
-    # See if there is any history for the next day
-    next_business_day = accepted_date + timedelta(days=1)
-    if next_business_day not in hist.index:
-        logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} No stock history for {next_business_day}.')
-        return {}
-
-    price1 = hist.loc[next_business_day]['Open']
-    price2 = hist.loc[next_business_day]['Close']
-    data_dict['prc_change'] = price_rate_change(price1, price2)
-    logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Next business day {next_business_day} '
-                 f'Open: {price1} Close: {price2}')
-
-    # See if there is any history for following business day
-    following_business_day = next_business_day + timedelta(days=1)
-    if following_business_day not in hist.index:
-        data_dict['error'] = f'No stock history for {following_business_day}'
-        return data_dict
-
-    price1 = hist.loc[next_business_day]['Open']
-    price2 = hist.loc[following_business_day]['Open']
-    logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Next business day {next_business_day} '
-                 f'Open: {price1}.  Following business day Open: {price2}')
-    data_dict['prc_change2'] = price_rate_change(price1, price2)
-    return data_dict
-
-
-def download_and_clean_filing(data_dict: dict):
-    """
-    We are passed a dictionary that contains the url of the overview of the 10-Q report and the CIK of the company.
-    1) Download the overview 10-Q report
-    2) Parse the report and find the 'Accepted Date'
-    3) Gather any financial data from Yahoo about the 10-Q report
-    4) If financial data was found the download the 10-Q report and strip out most the HTML.  Used later
-       to compare to a previous quarter 10-Q report.  Used for the AI part.
-    """
-    url = data_dict['url']
-    cik = pad_string(data_dict['cik'])
-
-    logger.info(f'CIK: {cik} Processing {url}')
-    try:
-        response = requests.get(url)
-    except requests.exceptions.ConnectionError as connection_error:
-        logger.error(f'CIK: {cik} Encountered an error connecting to {url}.  Error: {connection_error}')
-        return {}
-
-    soup = BeautifulSoup(response.content.decode('utf-8'), "lxml")
-    documents = soup.find('table', {'class': 'tableFile', 'summary': 'Document Format Files'})
-    if documents:
-        for tr in documents.find_all('tr'):
-            td = tr.find_all('td')
-            if len(td) >= 4 and td[3].text == ev.sec_form_type:
-                filing_url = td[2].find('a', href=True)
-                filing_href = filing_url['href']
-                data_dict['date_accepted'] = soup.find('div', attrs={'class': 'infoHead'}, text='Accepted')\
-                                                 .findNext('div', {'class': 'info'}).text
-
-                logger.debug(f'CIK: {cik} Started checking for financial data.')
-                finance_data = get_financial(data_dict)
-                logger.debug(f'CIK: {cik} Finished checking for financial data.')
-                if finance_data:
-                    if 'ix?' in filing_href:
-                        filing_href = '/' + '/'.join(filing_href.split('/')[2:])
-
-                    response = requests.request('GET', ev.sec_website + filing_href)
-                    logger.debug(f'CIK: {cik} Started cleaning file.')
-                    laundry = FilingCleaner(response.text, data_dict)
-                    finance_data['file_name'] = laundry.wash()
-                    logger.debug(f'CIK: {cik} Finished cleaning file.')
-
-                    # Insert this record into the database
-                    db.insert_into_finance(finance_data)
-
-
-def process_master_index():
-    """
-    Process the master.idx located in the output directory.  This was done previously (below).
-
-    Process each line of the master.idx file.  This file in delimited by pipe symbol '|'
-    For each line we extract the data then we download and clean the 10-Q.
-    """
-    build_dict_from_ticker()
-
-    # Remove all the old cleaned filings and truncate the database
-    remove_filing_files()
-    db.truncate_finance()
-
-    # Created by download_master_zip function below.
-    master_index = open(f'{ev.output_folder}/master.idx')
-    lines = master_index.read().splitlines()
-    master_index.close()
-
-    filings_to_download_and_clean = list()
-    for line in lines:
-        (cik, company_name, form_type, date_filed, file_name) = line.split('|')
-        if form_type == ev.sec_form_type:
-            filings_to_download_and_clean.append({
-                'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
-                'cik': cik,
-                'date_filed': date_filed,
-                'company_name': company_name
-            })
-
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
-        pool.map(download_and_clean_filing, filings_to_download_and_clean)
-        logger.info('Finished processing files.')
-    pool.close()
-    pool.join()
-
-    # Now parse and prepare the finance.json file
-    parse_finance()
+def pad_string(string: str, padding_length=10, padding_character='0'):
+    return string.rjust(padding_length, padding_character)
 
 
 def append_master_index(zip_file):
@@ -294,3 +111,93 @@ def download_master_zip():
                              f'Error: {http_error}')
         year += 1
     logger.info(f'Finished retrieving edgar master zip files.')
+
+
+class SEC:
+    def __init__(self):
+        self.cik_to_ticker_dict = generate_cik_to_ticker_dict()
+
+    def download_and_clean_filing(self, data_dict: dict):
+        """
+        We are passed a dictionary that contains the url of the overview of the 10-Q report and the CIK of the company.
+        1) Download the overview 10-Q report
+        2) Parse the report and find the 'Accepted Date'
+        3) Gather any financial data from Yahoo about the 10-Q report
+        4) If financial data was found the download the 10-Q report and strip out most the HTML.  Used later
+           to compare to a previous quarter 10-Q report.  Used for the AI part.
+        """
+        url = data_dict['url']
+        cik = pad_string(data_dict['cik'])
+
+        logger.info(f'CIK: {cik} Processing {url}')
+        try:
+            response = requests.get(url)
+        except requests.exceptions.ConnectionError as connection_error:
+            logger.error(f'CIK: {cik} Encountered an error connecting to {url}.  Error: {connection_error}')
+            return {}
+
+        soup = BeautifulSoup(response.content.decode('utf-8'), "lxml")
+        documents = soup.find('table', {'class': 'tableFile', 'summary': 'Document Format Files'})
+        if documents:
+            for tr in documents.find_all('tr'):
+                td = tr.find_all('td')
+                if len(td) >= 4 and td[3].text == ev.sec_form_type:
+                    filing_url = td[2].find('a', href=True)
+                    filing_href = filing_url['href']
+                    data_dict['date_accepted'] = soup.find('div', attrs={'class': 'infoHead'}, text='Accepted')\
+                                                     .findNext('div', {'class': 'info'}).text
+
+                    logger.debug(f'CIK: {cik} Started checking for financial data.')
+                    finance_data = get_financial(data_dict, self.cik_to_ticker_dict)
+                    logger.debug(f'CIK: {cik} Finished checking for financial data.')
+                    if finance_data:
+                        if 'ix?' in filing_href:
+                            filing_href = '/' + '/'.join(filing_href.split('/')[2:])
+
+                        response = requests.request('GET', ev.sec_website + filing_href)
+                        logger.debug(f'CIK: {cik} Started cleaning file.')
+                        laundry = FilingCleaner(response.text, data_dict)
+                        finance_data['file_name'] = laundry.wash()
+                        logger.debug(f'CIK: {cik} Finished cleaning file.')
+
+                        # Insert this record into the database
+                        db.insert_into_finance(finance_data)
+
+    def process_master_index(self):
+        """
+        Process the master.idx located in the output directory.  This was done previously (below).
+
+        Process each line of the master.idx file.  This file in delimited by pipe symbol '|'
+        For each line we extract the data then we download and clean the 10-Q.
+        """
+        cik_to_ticker_dict = generate_cik_to_ticker_dict()
+
+        # Remove all the old cleaned filings and truncate the database
+        remove_filing_files()
+        db.truncate_finance()
+
+        # Created by download_master_zip function below.
+        master_index = open(f'{ev.output_folder}/master.idx')
+        lines = master_index.read().splitlines()
+        master_index.close()
+
+        filings_to_download_and_clean = list()
+        for line in lines:
+            (cik, company_name, form_type, date_filed, file_name) = line.split('|')
+            if form_type == ev.sec_form_type:
+                filings_to_download_and_clean.append({
+                    'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
+                    'cik': cik,
+                    'date_filed': date_filed,
+                    'company_name': company_name
+                })
+
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+            logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
+            pool.map(self.download_and_clean_filing, filings_to_download_and_clean)
+            logger.info('Finished processing files.')
+        pool.close()
+        pool.join()
+
+        # Now parse and prepare the finance.json file
+        parse_finance()

@@ -16,7 +16,6 @@ class Environment:
         self.output_folder = os.path.join(self.dir_path, 'output')
         self.output_cleaned_files = os.path.join(self.output_folder, 'cleaned_files')
         self.output_log_files = os.path.join(self.output_folder, "logs")
-        self.output_data_files = os.path.join(self.output_folder, "data")
         self.output_db = os.path.join(self.output_folder, "db")
 
         # sec stuff

@@ -13,6 +13,4 @@ class ProcessAndPrepare:
         with open(os.path.join(ev.output_folder, 'data', 'finance.json')) as json_file:
             self.finance_data = json.load(json_file)
 
-    def process_finance(self):
-        cik_dict = dict()
 

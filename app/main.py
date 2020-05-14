@@ -2,7 +2,7 @@ import sys
 import os
 import logging
 from config import Environment
-import sec
+from sec import SEC, download_master_zip
 import db
 
 try:
@@ -35,10 +35,6 @@ def create_output_directories():
         logger.debug(f'Creating folder {ev.output_log_files}.  Log files will be placed here.')
         os.makedirs(ev.output_log_files)
 
-    if not os.path.exists(ev.output_data_files):
-        logger.debug(f'Creating folder {ev.output_data_files}.  Data files will be placed here.')
-        os.makedirs(ev.output_data_files)
-
     if not os.path.exists(ev.output_db):
         logger.debug(f'Creating folder {ev.output_db}.  Data files will be placed here.')
         os.makedirs(ev.output_db)
@@ -56,13 +52,14 @@ def main():
     create_output_directories()
     db.create_finance_table()
 
+    sec = SEC()
     if ev.app_do_all:
-        sec.download_master_zip()
+        download_master_zip()
         sec.process_master_index()
-        sec.parse_finance()
 
     elif ev.app_parse_finance:
-        sec.parse_finance()
+        # sec.parse_finance()
+        pass
 
     else:
         logger.debug('Could not find anything to do.')
