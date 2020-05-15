@@ -70,6 +70,7 @@ def get_financial(data_dict, cik_to_ticker_dict):
                      'Must be submitted between 4pm and 7pm.')
         return data_dict
 
+
     accepted_date = accepted_date.date()
     # Get the stock history between start and end date
     try:
