@@ -28,8 +28,8 @@ class Environment:
         self.sec_form_type = '10-Q'
 
         # where to start
-        self.app_get_differences = ''
-        self.app_create_report = ''
+        self.app_get_differences = '0'
+        self.app_create_report = '0'
 
         # load custom .env files from .env files.
         load_dotenv()
