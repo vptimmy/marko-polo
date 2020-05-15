@@ -4,40 +4,32 @@ import logging
 from config import Environment
 from sec import SEC, download_master_zip
 import db
+import differences
+from pathlib import Path
 
 try:
     ev = Environment()
+    Path(ev.output_log_files).mkdir(parents=True, exist_ok=True)
+    Path(ev.output_db).mkdir(parents=True, exist_ok=True)
+    Path(ev.output_cleaned_files).mkdir(parents=True, exist_ok=True)
+
     logging.basicConfig(
         format=ev.logging_format,
         datefmt=ev.logging_date_format,
     )
-    log_writer = logging.FileHandler(os.path.join(ev.output_log_files, 'output.log'), mode='w')
-    log_writer.setLevel('DEBUG')
-    log_writer.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)5s %(message)s'))
-
     logger = logging.getLogger(ev.app_name)
-    logger.addHandler(log_writer)
     logger.setLevel(level=ev.logging_level)
+
+    log_writer = logging.FileHandler(os.path.join(ev.output_log_files, 'output.log'), mode='w')
+    log_writer.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)5s %(message)s'))
+    log_writer.setLevel('DEBUG')
+    logger.addHandler(log_writer)
 except Exception as error:
     raise error
 
 
-def create_output_directories():
-    if not os.path.exists(ev.output_folder):
-        logger.debug(f'Creating folder {ev.output_folder}.')
-        os.makedirs(ev.output_folder)
-
-    if not os.path.exists(ev.output_cleaned_files):
-        logger.debug(f'Creating folder {ev.output_cleaned_files}.  Cleaned files will be placed here.')
-        os.makedirs(ev.output_cleaned_files)
-
-    if not os.path.exists(ev.output_log_files):
-        logger.debug(f'Creating folder {ev.output_log_files}.  Log files will be placed here.')
-        os.makedirs(ev.output_log_files)
-
-    if not os.path.exists(ev.output_db):
-        logger.debug(f'Creating folder {ev.output_db}.  Data files will be placed here.')
-        os.makedirs(ev.output_db)
+def create_csv():
+    pass
 
 
 def main():
@@ -49,20 +41,23 @@ def main():
     """
 
     # Create output folder and database
-    create_output_directories()
     db.create_finance_table()
 
-    sec = SEC()
-    if ev.app_do_all:
-        download_master_zip()
-        sec.process_master_index()
+    if ev.app_create_report:
+        create_csv()
 
-    elif ev.app_parse_finance:
-        # sec.parse_finance()
-        pass
-
+    elif ev.app_get_differences:
+        differences.get_differences()
+        create_csv()
     else:
-        logger.debug('Could not find anything to do.')
+        # If the master index does not exist then download a new one.
+        if not os.path.exists(os.path.join(ev.output_folder, 'master.idx')):
+            download_master_zip()
+
+        sec = SEC()
+        sec.process_master_index()
+        differences.get_differences()
+        create_csv()
 
 
 if __name__ == "__main__":

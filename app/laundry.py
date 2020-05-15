@@ -36,18 +36,15 @@ class FilingCleaner:
         [x.extract() for x in self.soup.find_all('table') if get_digit_percentage(x.get_text()) > 0.15]
 
     def wash(self):
-        # Remove xml xbrli
+        # Remove xml xbrli and local href
         [x.extract() for x in self.soup.find_all(re.compile("^xbrli:"))]
-
-        # Remove local href
         [x.extract() for x in self.soup.find_all('a', href=True) if len(x['href']) > 0 and x['href'][0] == '#']
 
-        # Remove and colored and numeric tables
+        # Remove and colored and numeric tables and basic html tags
         self.remove_numerical_tables()
-
-        # Get rid of everything with basic html
         [x.unwrap() for x in self.soup.find_all(['span', 'font', 'b', 'i', 'u', 'strong', 'img'])]
 
+        # clean up
         self.soup.smooth()
 
         text = self.soup.get_text('\n', strip=True)
@@ -59,7 +56,8 @@ class FilingCleaner:
         self.text = '\n'.join(
             filter(lambda line: len(line) > 0 and (sum(i.isalpha() for i in line) / len(line) > .5), text.splitlines()))
 
-        file_name = f'{self.data_dict["cik"]}-{self.data_dict["date_accepted"]}.txt'
+        file_date, _ = self.data_dict['date_accepted'].split(' ')
+        file_name = f'{self.data_dict["cik"]}-{file_date}.txt'
         with open(os.path.join(ev.output_cleaned_files, file_name), 'w') as file:
             file.write(self.text)
 

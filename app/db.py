@@ -58,7 +58,8 @@ def create_finance_table():
     if len(results) <= 0:
         logger.info('Started creating sqlite table marko_finance')
         sql = '''CREATE TABLE IF NOT EXISTS marko_finance(
-                        cik int,
+                        id integer PRIMARY KEY AUTOINCREMENT,
+                        cik integer,
                         company_name text,
                         ticker_symbol text, 
                         date_filed text, 
@@ -66,7 +67,8 @@ def create_finance_table():
                         prc_change text,
                         prc_change2 text,
                         file_name text,
-                        url text
+                        url text,
+                        difference_from_last_report text
                     )'''
         cursor.execute(sql)
 

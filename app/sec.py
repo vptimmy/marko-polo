@@ -9,7 +9,6 @@ from urllib.error import HTTPError
 from config import Environment
 from laundry import FilingCleaner
 from finance import get_financial, generate_cik_to_ticker_dict
-from process_and_prepare import ProcessAndPrepare
 import db
 
 import requests
@@ -37,10 +36,6 @@ def remove_filing_files():
         if file.endswith(".txt"):
             os.remove(f'{ev.output_cleaned_files}/{file}')
     logger.info(f'Finished deleting all cleaned files from {ev.output_cleaned_files}.')
-
-
-def parse_finance():
-    tasks = ProcessAndPrepare()
 
 
 def pad_string(string: str, padding_length=10, padding_character='0'):
@@ -80,6 +75,9 @@ def download_master_zip():
     The program defaults to 2020 and all quarters
     """
 
+    # Remove all the old cleaned filings and truncate the database
+    remove_filing_files()
+    db.truncate_finance()
     remove_master_index_file()
 
     logger.info(f'Started retrieving edgar master zip files since {ev.sec_analyze_since_fy}.')
@@ -115,9 +113,11 @@ def download_master_zip():
 
 class SEC:
     def __init__(self):
+        # Had to make this a class just so I can generate the CIK -> ticker symbol dict one time.  Hate
+        # to use global.  Interested in doing this another way?  Could store in sqlite?
         self.cik_to_ticker_dict = generate_cik_to_ticker_dict()
 
-    def download_and_clean_filing(self, data_dict: dict):
+    def download_and_clean_files(self, data_dict: dict):
         """
         We are passed a dictionary that contains the url of the overview of the 10-Q report and the CIK of the company.
         1) Download the overview 10-Q report
@@ -134,7 +134,7 @@ class SEC:
             response = requests.get(url)
         except requests.exceptions.ConnectionError as connection_error:
             logger.error(f'CIK: {cik} Encountered an error connecting to {url}.  Error: {connection_error}')
-            return {}
+            return
 
         soup = BeautifulSoup(response.content.decode('utf-8'), "lxml")
         documents = soup.find('table', {'class': 'tableFile', 'summary': 'Document Format Files'})
@@ -147,57 +147,56 @@ class SEC:
                     data_dict['date_accepted'] = soup.find('div', attrs={'class': 'infoHead'}, text='Accepted')\
                                                      .findNext('div', {'class': 'info'}).text
 
+                    # Get financial data, if any
                     logger.debug(f'CIK: {cik} Started checking for financial data.')
                     finance_data = get_financial(data_dict, self.cik_to_ticker_dict)
                     logger.debug(f'CIK: {cik} Finished checking for financial data.')
-                    if finance_data:
-                        if 'ix?' in filing_href:
-                            filing_href = '/' + '/'.join(filing_href.split('/')[2:])
 
-                        response = requests.request('GET', ev.sec_website + filing_href)
-                        logger.debug(f'CIK: {cik} Started cleaning file.')
-                        laundry = FilingCleaner(response.text, data_dict)
-                        finance_data['file_name'] = laundry.wash()
-                        logger.debug(f'CIK: {cik} Finished cleaning file.')
+                    if 'ix?' in filing_href:
+                        filing_href = '/' + '/'.join(filing_href.split('/')[2:])
 
-                        # Insert this record into the database
-                        db.insert_into_finance(finance_data)
+                    response = requests.request('GET', ev.sec_website + filing_href)
+
+                    logger.debug(f'CIK: {cik} Started cleaning file.')
+                    laundry = FilingCleaner(response.text, data_dict)
+                    finance_data['file_name'] = laundry.wash()
+                    logger.debug(f'CIK: {cik} Finished cleaning file.')
+
+                    # Insert this record into the database
+                    db.insert_into_finance(finance_data)
+                    break
+        return
 
     def process_master_index(self):
         """
-        Process the master.idx located in the output directory.  This was done previously (below).
+        Process the master.idx located in the output directory.
 
         Process each line of the master.idx file.  This file in delimited by pipe symbol '|'
         For each line we extract the data then we download and clean the 10-Q.
         """
-        cik_to_ticker_dict = generate_cik_to_ticker_dict()
-
-        # Remove all the old cleaned filings and truncate the database
-        remove_filing_files()
-        db.truncate_finance()
-
-        # Created by download_master_zip function below.
         master_index = open(f'{ev.output_folder}/master.idx')
         lines = master_index.read().splitlines()
         master_index.close()
 
-        filings_to_download_and_clean = list()
+        # Allow us to resume in case of error / power outage / mistake
+        path = ev.output_cleaned_files
+        files_processed = set(f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))
+
+        files_to_download_and_clean = list()
         for line in lines:
             (cik, company_name, form_type, date_filed, file_name) = line.split('|')
-            if form_type == ev.sec_form_type:
-                filings_to_download_and_clean.append({
+            local_file_name = f'{cik}-{date_filed}'
+            if form_type == ev.sec_form_type and local_file_name not in files_processed:
+                files_to_download_and_clean.append({
                     'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
                     'cik': cik,
                     'date_filed': date_filed,
                     'company_name': company_name
                 })
 
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        with multiprocessing.Pool(processes=ev.number_of_cores) as pool:
             logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
-            pool.map(self.download_and_clean_filing, filings_to_download_and_clean)
+            pool.map(self.download_and_clean_files, files_to_download_and_clean, chunksize=100)
             logger.info('Finished processing files.')
         pool.close()
         pool.join()
-
-        # Now parse and prepare the finance.json file
-        parse_finance()

@@ -14,7 +14,7 @@ def pad_string(string: str, padding_length=10, padding_character='0'):
 
 
 def price_rate_change(price1, price2):
-    return (price1 - price2) / price2
+    return round((price1 - price2) / price2, 5)
 
 
 def generate_cik_to_ticker_dict():
@@ -27,20 +27,19 @@ def generate_cik_to_ticker_dict():
     lines = ticker.text.splitlines()
     for line in lines:
         (ticker_symbol, cik) = line.split('\t')
-        cik_to_ticker_dict[cik] = ticker_symbol
+        if cik in cik_to_ticker_dict:
+            logger.error(f'CIK {cik} is already mapped to {cik_to_ticker_dict[cik]}.  Not mapping to {ticker_symbol}')
+        else:
+            cik_to_ticker_dict[cik] = ticker_symbol
 
     with open(os.path.join(ev.dir_path, 'input', 'cik_to_ticker.txt')) as cik_input:
         for line in cik_input:
             if not line.startswith('#') and len(line) > 5:
-                cik, ticker = line.strip().split(' ')
-                if cik and ticker:
-                    cik_to_ticker_dict[cik] = ticker
+                cik, ticker_symbol = line.strip().split(' ')
+                if cik and ticker_symbol:
+                    # Allow custom ticker to override SEC one.  SEC does not seem up to date.
+                    cik_to_ticker_dict[cik] = ticker_symbol
     return cik_to_ticker_dict
-
-
-class GetFinance:
-    def __init__(self):
-        self.cik_to_ticker_dict = generate_cik_to_ticker_dict()
 
 
 def get_financial(data_dict, cik_to_ticker_dict):
@@ -66,7 +65,7 @@ def get_financial(data_dict, cik_to_ticker_dict):
     end_date = accepted_date + timedelta(days=3)
     logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Accepted date {accepted_date}.  End date is {end_date}')
 
-    if not 16 <= accepted_date.hour <= 19:
+    if not (16 <= accepted_date.hour <= 19):
         logging.info(f'CIK: {cik_log} Ticker: {ticker_symbol} 10-Q is outside time frame.  '
                      'Must be submitted between 4pm and 7pm.')
         return {}
@@ -91,7 +90,7 @@ def get_financial(data_dict, cik_to_ticker_dict):
 
     price1 = hist.loc[next_business_day]['Open']
     price2 = hist.loc[next_business_day]['Close']
-    data_dict['prc_change'] = price_rate_change(price1, price2)
+    data_dict['prc_change'] = price_rate_change(price2, price1)
     logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Next business day {next_business_day} '
                  f'Open: {price1} Close: {price2}')
 
@@ -105,5 +104,5 @@ def get_financial(data_dict, cik_to_ticker_dict):
     price2 = hist.loc[following_business_day]['Open']
     logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Next business day {next_business_day} '
                  f'Open: {price1}.  Following business day Open: {price2}')
-    data_dict['prc_change2'] = price_rate_change(price1, price2)
+    data_dict['prc_change2'] = price_rate_change(price2, price1)
     return data_dict
