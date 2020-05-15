@@ -191,12 +191,15 @@ class SEC:
                     'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
                     'cik': cik,
                     'date_filed': date_filed,
-                    'company_name': company_name
+                    'company_name': company_name,
+                    'ticker_symbol': None,
+                    'prc_change': None,
+                    'prc_change2': None
                 })
 
         with multiprocessing.Pool(processes=ev.number_of_cores) as pool:
             logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
-            pool.map(self.download_and_clean_files, files_to_download_and_clean, chunksize=100)
+            pool.map(self.download_and_clean_files, files_to_download_and_clean)
             logger.info('Finished processing files.')
         pool.close()
         pool.join()

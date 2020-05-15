@@ -59,7 +59,7 @@ def get_financial(data_dict, cik_to_ticker_dict):
         logger.debug(f'CIK: {cik_log} Ticker symbol is {ticker_symbol}.')
     except KeyError:
         logger.error(f'CIK: {cik_log} Could not find {cik} in ticker feed.')
-        return {}
+        return data_dict
 
     accepted_date = datetime.strptime(data_dict['date_accepted'], '%Y-%m-%d %H:%M:%S')
     end_date = accepted_date + timedelta(days=3)
@@ -68,7 +68,8 @@ def get_financial(data_dict, cik_to_ticker_dict):
     if not (16 <= accepted_date.hour <= 19):
         logging.info(f'CIK: {cik_log} Ticker: {ticker_symbol} 10-Q is outside time frame.  '
                      'Must be submitted between 4pm and 7pm.')
-        return {}
+        return data_dict
+
 
     accepted_date = accepted_date.date()
     # Get the stock history between start and end date
@@ -76,17 +77,17 @@ def get_financial(data_dict, cik_to_ticker_dict):
         hist = yf.Ticker(ticker_symbol).history(start=accepted_date, end=end_date)
         if hist.empty:
             logger.error(f'CIK: {cik_log} Ticker: {ticker_symbol} Could not find a history in yFinance.')
-            return {}
+            return data_dict
         logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} Got yahoo finance history\r\n{hist}')
     except Exception as e:
         logging.error(f'CIK: {cik_log} Ticker: {ticker_symbol} yFinance encountered an error: {e}')
-        return {}
+        return data_dict
 
     # See if there is any history for the next day
     next_business_day = accepted_date + timedelta(days=1)
     if next_business_day not in hist.index:
         logger.debug(f'CIK: {cik_log} Ticker: {ticker_symbol} No stock history for {next_business_day}.')
-        return {}
+        return data_dict
 
     price1 = hist.loc[next_business_day]['Open']
     price2 = hist.loc[next_business_day]['Close']
