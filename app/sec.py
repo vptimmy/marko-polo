@@ -74,10 +74,6 @@ def download_master_zip():
 
     The program defaults to 2020 and all quarters
     """
-
-    # Remove all the old cleaned filings and truncate the database
-    remove_filing_files()
-    db.truncate_finance()
     remove_master_index_file()
 
     logger.info(f'Started retrieving edgar master zip files since {ev.sec_analyze_since_fy}.')
@@ -157,12 +153,8 @@ class SEC:
 
                     response = requests.request('GET', ev.sec_website + filing_href)
 
-                    logger.debug(f'CIK: {cik} Started cleaning file.')
                     laundry = FilingCleaner(response.text, data_dict)
                     finance_data['file_name'] = laundry.wash()
-                    logger.debug(f'CIK: {cik} Finished cleaning file.')
-
-                    # Insert this record into the database
                     db.insert_into_finance(finance_data)
                     break
         return
@@ -179,14 +171,18 @@ class SEC:
         master_index.close()
 
         # Allow us to resume in case of error / power outage / mistake
-        path = ev.output_cleaned_files
-        files_processed = set(f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))
+        conn = db.connect_to_db()
+        cursor = conn.cursor()
 
         files_to_download_and_clean = list()
         for line in lines:
             (cik, company_name, form_type, date_filed, file_name) = line.split('|')
-            local_file_name = f'{cik}-{date_filed}'
-            if form_type == ev.sec_form_type and local_file_name not in files_processed:
+
+            # Process it if we have not yet.
+            sql = 'select cik from marko_finance where cik=? and date_filed=?'
+            cursor.execute(sql, (cik, date_filed))
+            results = cursor.fetchall()
+            if form_type == ev.sec_form_type and len(results) == 0:
                 files_to_download_and_clean.append({
                     'url': f'{ev.sec_website}/Archives/{file_name.replace(".txt", "-index.html")}',
                     'cik': cik,
@@ -196,9 +192,10 @@ class SEC:
                     'prc_change': None,
                     'prc_change2': None
                 })
+        conn.close()
 
         with multiprocessing.Pool(processes=ev.number_of_cores) as pool:
-            logger.info(f'Started processing files. Number of CPU\'s: {multiprocessing.cpu_count()}')
+            logger.info(f'Started processing files. Number of CPU\'s: {ev.number_of_cores}')
             pool.map(self.download_and_clean_files, files_to_download_and_clean)
             logger.info('Finished processing files.')
         pool.close()

@@ -36,6 +36,8 @@ class FilingCleaner:
         [x.extract() for x in self.soup.find_all('table') if get_digit_percentage(x.get_text()) > 0.15]
 
     def wash(self):
+        logger.debug(f'CIK: {self.data_dict["cik"]}. Started cleaning file.')
+
         # Remove xml xbrli and local href
         [x.extract() for x in self.soup.find_all(re.compile("^xbrli:"))]
         [x.extract() for x in self.soup.find_all('a', href=True) if len(x['href']) > 0 and x['href'][0] == '#']
@@ -61,4 +63,5 @@ class FilingCleaner:
         with open(os.path.join(ev.output_cleaned_files, file_name), 'w') as file:
             file.write(self.text)
 
+        logger.debug(f'CIK: {self.data_dict["cik"]}. Finished cleaning file {file_name}.')
         return file_name

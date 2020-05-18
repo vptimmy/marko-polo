@@ -28,7 +28,7 @@ def generate_cik_to_ticker_dict():
     for line in lines:
         (ticker_symbol, cik) = line.split('\t')
         if cik in cik_to_ticker_dict:
-            logger.error(f'CIK {cik} is already mapped to {cik_to_ticker_dict[cik]}.  Not mapping to {ticker_symbol}')
+            logger.debug(f'CIK {cik} is already mapped to {cik_to_ticker_dict[cik]}.  Not mapping to {ticker_symbol}')
         else:
             cik_to_ticker_dict[cik] = ticker_symbol
 
@@ -69,7 +69,6 @@ def get_financial(data_dict, cik_to_ticker_dict):
         logging.info(f'CIK: {cik_log} Ticker: {ticker_symbol} 10-Q is outside time frame.  '
                      'Must be submitted between 4pm and 7pm.')
         return data_dict
-
 
     accepted_date = accepted_date.date()
     # Get the stock history between start and end date

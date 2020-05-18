@@ -9,34 +9,49 @@ logger = logging.getLogger(ev.app_name)
 
 def connect_to_db():
     db_location = os.path.join(ev.output_db, 'marko-polo.db')
-    return sqlite3.connect(db_location, check_same_thread=False)
+    return sqlite3.connect(db_location)
 
 
 def insert_into_finance(finance_data):
-    conn = connect_to_db()
-    cursor = conn.cursor()
+    try:
+        conn = connect_to_db()
+        cursor = conn.cursor()
 
-    prc_change2 = None
-    if 'prc_change2' in finance_data:
-        prc_change2 = finance_data['prc_change2']
+        prc_change2 = None
 
-    sql = '''INSERT INTO marko_finance 
-                (cik, company_name, url, date_filed, date_accepted, ticker_symbol, file_name, prc_change, prc_change2)
-                VALUES (?,?,?,?,?,?,?,?,?)
-    '''
-    cursor.execute(sql, (
-        finance_data['cik'],
-        finance_data['company_name'],
-        finance_data['url'],
-        finance_data['date_filed'],
-        finance_data['date_accepted'],
-        finance_data['ticker_symbol'],
-        finance_data['file_name'],
-        finance_data['prc_change'],
-        prc_change2
-    ))
-    conn.commit()
-    conn.close()
+        if 'prc_change2' in finance_data:
+            prc_change2 = finance_data['prc_change2']
+
+        sql = '''INSERT INTO marko_finance 
+                    (
+                        cik, 
+                        company_name, 
+                        url, 
+                        date_filed, 
+                        date_accepted, 
+                        ticker_symbol, 
+                        file_name, 
+                        prc_change, 
+                        prc_change2
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+
+        cursor.execute(sql, (
+            finance_data['cik'],
+            finance_data['company_name'],
+            finance_data['url'],
+            finance_data['date_filed'],
+            finance_data['date_accepted'],
+            finance_data['ticker_symbol'],
+            finance_data['file_name'],
+            finance_data['prc_change'],
+            prc_change2
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f'Could not insert record into database: {finance_data}. Error: {e}')
 
 
 def truncate_finance():

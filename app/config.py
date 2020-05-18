@@ -28,8 +28,8 @@ class Environment:
         self.sec_form_type = '10-Q'
 
         # where to start
-        self.app_get_differences = '0'
-        self.app_create_report = '0'
+        self.get_differences = '0'
+        self.create_report = '0'
 
         # load custom .env files from .env files.
         load_dotenv()
@@ -48,5 +48,5 @@ class Environment:
             # Assign current cpu count
             self.number_of_cores = multiprocessing.cpu_count()
 
-        self.app_get_differences = bool(util.strtobool(self.app_get_differences))
-        self.app_create_report = bool(util.strtobool(self.app_create_report))
+        self.get_differences = bool(util.strtobool(self.get_differences))
+        self.create_report = bool(util.strtobool(self.create_report))

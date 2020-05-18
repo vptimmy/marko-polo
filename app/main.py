@@ -6,6 +6,8 @@ from sec import SEC, download_master_zip
 import db
 import differences
 from pathlib import Path
+import pandas
+from datetime import datetime
 
 try:
     ev = Environment()
@@ -20,7 +22,7 @@ try:
     logger = logging.getLogger(ev.app_name)
     logger.setLevel(level=ev.logging_level)
 
-    log_writer = logging.FileHandler(os.path.join(ev.output_log_files, 'output.log'), mode='w')
+    log_writer = logging.FileHandler(os.path.join(ev.output_log_files, f'{datetime.now()}-output.log'), mode='w')
     log_writer.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)5s %(message)s'))
     log_writer.setLevel('DEBUG')
     logger.addHandler(log_writer)
@@ -29,7 +31,20 @@ except Exception as error:
 
 
 def create_csv():
-    pass
+    conn = db.connect_to_db()
+    sql = '''SELECT
+                 difference_from_last_report as differ,
+                 prc_change2 
+             FROM 
+                 marko_finance 
+             WHERE 
+                 prc_change2 IS NOT NULL AND
+                 difference_from_last_report IS NOT NULL'''
+    finance = pandas.read_sql_query(sql, conn)
+    finance['prc_change2'] = pandas.qcut(finance.prc_change2.astype(float), q=5, labels=range(5))
+    finance['differ'] = finance.differ.str.replace(r'\r|\n', ' ').replace(r'"', '')
+    finance.to_csv('training_data.csv', header=False, index=False)
+    conn.close()
 
 
 def main():
@@ -43,18 +58,14 @@ def main():
     # Create output folder and database
     db.create_finance_table()
 
-    if ev.app_create_report:
+    if ev.create_report:
         create_csv()
-
-    elif ev.app_get_differences:
+    elif ev.get_differences:
         differences.get_differences()
         create_csv()
     else:
-        # If the master index does not exist then download a new one.
-        if not os.path.exists(os.path.join(ev.output_folder, 'master.idx')):
-            download_master_zip()
-
         sec = SEC()
+        download_master_zip()
         sec.process_master_index()
         differences.get_differences()
         create_csv()

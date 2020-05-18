@@ -45,6 +45,10 @@ def create_diff(data_dict):
     if new_sentences:
         new_sentence = '\n'.join(new_sentences)
 
+        # Google Natural Language will not accept an input greater than 60K characters
+        if len(new_sentence) > 60000:
+            new_sentence = new_sentence[:59999]
+
         conn = db.connect_to_db()
         cursor = conn.cursor()
         sql = 'UPDATE marko_finance SET difference_from_last_report=? WHERE id=?'
@@ -56,7 +60,7 @@ def create_diff(data_dict):
 
 
 def get_differences():
-    logger.info(f'Started processing differences')
+    logger.info(f'Started processing differences.')
 
     conn = db.connect_to_db()
     sql = '''SELECT 
@@ -64,12 +68,13 @@ def get_differences():
                 cik, 
                 file_name, 
                 date_accepted, 
-                company_name 
+                difference_from_last_report,
+                prc_change2 
             FROM 
                 marko_finance 
-            WHERE 
-                difference_from_last_report IS NULL 
-            ORDER BY cik, date_accepted'''
+            ORDER BY 
+                cik, 
+                date_accepted'''
     cursor = conn.cursor()
     cursor.execute(sql)
     results = cursor.fetchall()
@@ -80,16 +85,15 @@ def get_differences():
 
     find_differences_list = list()
     for record in results:
-        (record_id, cik, filename, date_accepted, company_name) = record
+        (record_id, cik, filename, date_accepted, difference, prc_change) = record
         converted_date = datetime.strptime(date_accepted, '%Y-%m-%d %H:%M:%S')
 
-        if cik == old_cik:
+        if prc_change and difference is None and cik == old_cik:
             week_difference = (converted_date - old_date).days / 7
             if 9 <= week_difference <= 17:
                 find_differences_list.append({
                     'id': record_id,
                     'cik': cik,
-                    'company_name': company_name,
                     'current_file': filename,
                     'old_file': old_filename
                 })
@@ -103,5 +107,4 @@ def get_differences():
     pool.close()
     pool.join()
 
-    logger.info(f'Finished processing differences')
-
+    logger.info(f'Finished processing differences.')
